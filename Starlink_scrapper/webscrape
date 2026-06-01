@@ -1,0 +1,88 @@
+from bs4 import BeautifulSoup
+from datetime import date, timedelta
+import re, csv
+
+# ─────────────────────────────────────────
+# CONFIG: update filenames and start dates
+# ─────────────────────────────────────────
+files = [
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\Nov-December.html", date(2025, 11, 1), 30),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\Dec-Jan.html",      date(2025, 12, 1), 31),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\Jan-Feb.html",      date(2026,  1, 1), 31),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\feb-march.html",    date(2026,  2, 1), 28),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\mar-apr.html",      date(2026,  3, 1), 31),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\april-may.html",    date(2026,  4, 1), 30),
+    (r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\May-June.html",     date(2026,  5, 1), 31),
+]
+
+OUTPUT_CSV = r"C:\Users\karlt\OneDrive\Desktop\Sign Up, Log In\Web Scrape\daily_usage.csv"
+
+
+# ─────────────────────────────────────────
+# CORE PARSER
+# ─────────────────────────────────────────
+def parse_usage_html(filepath, start_date, num_days):
+    with open(filepath, "r", encoding="utf-8") as f:
+        soup = BeautifulSoup(f.read(), "html.parser")
+
+    # Step 1: Read Y-axis tick labels to calibrate the GB scale
+    ticks = []
+    for tick in soup.select("g.MuiChartsAxis-directionY .MuiChartsAxis-tickContainer"):
+        transform = tick.get("transform", "")
+        match = re.search(r"translate\(0,\s*([\d.]+)\)", transform)
+        label_el = tick.find("text")
+        if match and label_el:
+            y_pos = float(match.group(1))
+            gb_match = re.search(r"([\d.]+)\s*GB", label_el.text)
+            if gb_match:
+                ticks.append((y_pos, float(gb_match.group(1))))
+
+    if len(ticks) < 2:
+        print(f"  WARNING: Could not read Y-axis ticks in {filepath}")
+        return []
+
+    # Bottom tick = 0 GB, Top tick = max GB
+    y_zero = ticks[0][0]
+    y_top  = ticks[-1][0]
+    gb_max = ticks[-1][1]
+
+    # Step 2: Convert SVG bar position to GB value
+    # In SVG, y=0 is the TOP of the screen, so smaller y = taller bar = more GB
+    def y_to_gb(y, h):
+        if h == 0:
+            return 0.0
+        return round(((y_zero - y) / (y_zero - y_top)) * gb_max, 2)
+
+    # Step 3: Extract the white bars (data-series="y_0" = Residential Data)
+    bars = soup.select("g[data-series='y_0'] rect")
+
+    results = []
+    for i, bar in enumerate(bars[:num_days]):
+        y = float(bar.get("y", y_zero))
+        h = float(bar.get("height", 0))
+        d = start_date + timedelta(days=i)
+        results.append((d, y_to_gb(y, h)))
+
+    return results
+
+
+# ─────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────
+all_data = []
+
+for filepath, start_date, num_days in files:
+    print(f"Parsing {filepath}...")
+    daily = parse_usage_html(filepath, start_date, num_days)
+    all_data.extend(daily)
+    print(f"  → {len(daily)} days parsed")
+
+# Write to CSV
+with open(OUTPUT_CSV, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["Date", "Month", "Usage_GB"])
+    for d, gb in all_data:
+        writer.writerow([str(d), d.strftime("%B %Y"), gb])
+
+print(f"\nDone! {len(all_data)} days saved to {OUTPUT_CSV}")
+print(f"Grand total: {sum(gb for _, gb in all_data):.2f} GB")

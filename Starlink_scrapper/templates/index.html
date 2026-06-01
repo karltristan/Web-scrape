@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Starlink Usage Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg:       #0a0e1a;
+      --surface:  #111827;
+      --border:   #1e2d45;
+      --accent:   #00d4ff;
+      --accent2:  #7c3aed;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --success:  #10b981;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Starfield background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3) 0%, transparent 100%),
+        radial-gradient(1px 1px at 80% 10%, rgba(255,255,255,0.2) 0%, transparent 100%),
+        radial-gradient(1px 1px at 50% 80%, rgba(255,255,255,0.15) 0%, transparent 100%),
+        radial-gradient(1px 1px at 10% 60%, rgba(255,255,255,0.25) 0%, transparent 100%),
+        radial-gradient(1px 1px at 90% 50%, rgba(255,255,255,0.2) 0%, transparent 100%),
+        radial-gradient(2px 2px at 35% 15%, rgba(0,212,255,0.2) 0%, transparent 100%),
+        radial-gradient(2px 2px at 65% 70%, rgba(124,58,237,0.2) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 3rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .subtitle {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ── UPLOAD ZONE ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(255,255,255,0.02);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.04);
+    }
+
+    .upload-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,212,255,0.03), rgba(124,58,237,0.03));
+      pointer-events: none;
+    }
+
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+
+    .upload-zone h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .upload-zone p {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    #fileInput { display: none; }
+
+    .file-list {
+      margin-top: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .file-tag {
+      background: rgba(0,212,255,0.1);
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .file-tag .remove {
+      cursor: pointer;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .file-tag .remove:hover { opacity: 1; color: var(--danger); }
+
+    /* ── BUTTONS ── */
+    .btn-row {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.75rem;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #0099cc);
+      color: #000;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,212,255,0.3); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── LOADING ── */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading p {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ── ERRORS ── */
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-top: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: #fca5a5;
+      display: none;
+    }
+
+    /* ── RESULTS ── */
+    #results { display: none; margin-top: 2.5rem; }
+
+    /* ── STATS GRID ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 700px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .stat-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    /* ── CHARTS ── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 800px) {
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      animation: fadeUp 0.4s ease 0.1s both;
+    }
+
+    .chart-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── TABLE ── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      animation: fadeUp 0.4s ease 0.2s both;
+      margin-top: 1rem;
+    }
+
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-header h3 {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .search-input {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.75rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text);
+      outline: none;
+      width: 180px;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--muted); }
+
+    .table-wrap {
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .table-wrap::-webkit-scrollbar { width: 4px; }
+    .table-wrap::-webkit-scrollbar-track { background: transparent; }
+    .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+    }
+
+    thead th {
+      background: rgba(255,255,255,0.03);
+      padding: 0.75rem 1.5rem;
+      text-align: left;
+      color: var(--muted);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody tr {
+      border-top: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+    tbody td {
+      padding: 0.65rem 1.5rem;
+      color: var(--text);
+    }
+
+    .usage-bar-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .usage-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      min-width: 2px;
+      transition: width 0.3s;
+    }
+
+    .usage-zero { color: var(--muted); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-high   { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+    .badge-med    { background: rgba(245,158,11,0.15); color: #fcd34d; }
+    .badge-low    { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+    .badge-zero   { background: rgba(100,116,139,0.15); color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">🛰️</div>
+    <div>
+      <h1>Starlink <span>Usage</span> Tracker</h1>
+      <div class="subtitle">HTML Snapshot Parser · Residential Data</div>
+    </div>
+  </header>
+
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="uploadZone">
+    <span class="upload-icon">📂</span>
+    <h2>Drop your saved HTML files here</h2>
+    <p>or click to browse · supports multiple files at once</p>
+    <input type="file" id="fileInput" accept=".html" multiple />
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="parseBtn" disabled onclick="parseFiles()">
+      ⚡ Parse Usage Data
+    </button>
+    <button class="btn btn-secondary" id="exportBtn" disabled onclick="exportCSV()">
+      ⬇ Export CSV
+    </button>
+    <button class="btn btn-secondary" onclick="resetAll()">
+      ↺ Reset
+    </button>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Parsing HTML files...</p>
+  </div>
+
+  <!-- ERRORS -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <!-- STATS -->
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <!-- CHARTS -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">📈 Daily Usage (GB)</div>
+        <canvas id="dailyChart" height="120"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">📊 Monthly Totals (GB)</div>
+        <canvas id="monthlyChart" height="120"></canvas>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="table-header">
+        <h3>📋 Daily Breakdown</h3>
+        <input class="search-input" id="searchInput" placeholder="Search date or month..." oninput="filterTable()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>Month</th>
+              <th>Usage (GB)</th>
+              <th>Level</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let parsedData = null;
+  let selectedFiles = new DataTransfer();
+
+  // ── DRAG & DROP ──
+  const zone = document.getElementById("uploadZone");
+  zone.addEventListener("click", () => document.getElementById("fileInput").click());
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    addFiles(e.dataTransfer.files);
+  });
+
+  document.getElementById("fileInput").addEventListener("change", e => addFiles(e.target.files));
+
+  function addFiles(files) {
+    for (const f of files) {
+      if (f.name.endsWith(".html")) selectedFiles.items.add(f);
+    }
+    renderFileTags();
+  }
+
+  function removeFile(name) {
+    const dt = new DataTransfer();
+    for (const f of selectedFiles.files) {
+      if (f.name !== name) dt.items.add(f);
+    }
+    selectedFiles = dt;
+    renderFileTags();
+  }
+
+  function renderFileTags() {
+    const list = document.getElementById("fileList");
+    list.innerHTML = "";
+    for (const f of selectedFiles.files) {
+      const tag = document.createElement("div");
+      tag.className = "file-tag";
+      tag.innerHTML = `📄 ${f.name} <span class="remove" onclick="removeFile('${f.name}')">✕</span>`;
+      list.appendChild(tag);
+    }
+    document.getElementById("parseBtn").disabled = selectedFiles.files.length === 0;
+  }
+
+  // ── PARSE ──
+  async function parseFiles() {
+    const formData = new FormData();
+    for (const f of selectedFiles.files) formData.append("html_files", f);
+
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("errorBox").style.display = "none";
+    document.getElementById("parseBtn").disabled = true;
+
+    try {
+      const res  = await fetch("/parse", { method: "POST", body: formData });
+      const data = await res.json();
+
+      document.getElementById("loading").style.display = "none";
+
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+
+      if (data.errors && data.errors.length) {
+        showError(data.errors.join("\n"));
+      }
+
+      parsedData = data;
+      renderResults(data);
+      document.getElementById("exportBtn").disabled = false;
+
+    } catch (err) {
+      document.getElementById("loading").style.display = "none";
+      showError("Failed to parse files: " + err.message);
+    }
+
+    document.getElementById("parseBtn").disabled = false;
+  }
+
+  function showError(msg) {
+    const box = document.getElementById("errorBox");
+    box.textContent = "⚠ " + msg;
+    box.style.display = "block";
+  }
+
+  // ── RENDER ──
+  function renderResults(data) {
+    renderStats(data.summary);
+    renderDailyChart(data.daily);
+    renderMonthlyChart(data.monthly);
+    renderTable(data.daily);
+    document.getElementById("results").style.display = "block";
+  }
+
+  function renderStats(s) {
+    const grid = document.getElementById("statsGrid");
+    grid.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Total Usage</div>
+        <div class="stat-value">${s.total_gb}</div>
+        <div class="stat-sub">GB across ${s.num_days} days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Daily Average</div>
+        <div class="stat-value">${s.avg_gb}</div>
+        <div class="stat-sub">GB per day</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Peak Day</div>
+        <div class="stat-value">${s.peak_day ? s.peak_day.usage_gb : '—'}</div>
+        <div class="stat-sub">${s.peak_day ? s.peak_day.date : ''} GB</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Days Tracked</div>
+        <div class="stat-value">${s.num_days}</div>
+        <div class="stat-sub">with recorded data</div>
+      </div>
+    `;
+  }
+
+  let dailyChartInst = null, monthlyChartInst = null;
+
+  function renderDailyChart(daily) {
+    if (dailyChartInst) dailyChartInst.destroy();
+    const ctx = document.getElementById("dailyChart").getContext("2d");
+    const active = daily.filter(d => d.usage_gb > 0);
+    dailyChartInst = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: active.map(d => d.date),
+        datasets: [{
+          data: active.map(d => d.usage_gb),
+          backgroundColor: active.map(d => {
+            if (d.usage_gb > 30) return "rgba(239,68,68,0.7)";
+            if (d.usage_gb > 15) return "rgba(0,212,255,0.7)";
+            return "rgba(124,58,237,0.7)";
+          }),
+          borderRadius: 3,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: { label: ctx => ` ${ctx.raw} GB` }
+        }},
+        scales: {
+          x: { ticks: { display: false }, grid: { color: "rgba(255,255,255,0.04)" } },
+          y: { ticks: { color: "#64748b", font: { family: "Space Mono", size: 10 } },
+               grid: { color: "rgba(255,255,255,0.04)" } }
+        }
+      }
+    });
+  }
+
+  function renderMonthlyChart(monthly) {
+    if (monthlyChartInst) monthlyChartInst.destroy();
+    const ctx = document.getElementById("monthlyChart").getContext("2d");
+    monthlyChartInst = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: monthly.map(m => m.month),
+        datasets: [{
+          data: monthly.map(m => m.usage_gb),
+          backgroundColor: [
+            "rgba(0,212,255,0.8)","rgba(124,58,237,0.8)","rgba(16,185,129,0.8)",
+            "rgba(245,158,11,0.8)","rgba(239,68,68,0.8)","rgba(99,102,241,0.8)",
+            "rgba(236,72,153,0.8)"
+          ],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: "bottom", labels: {
+            color: "#64748b", font: { family: "Space Mono", size: 9 }, boxWidth: 10, padding: 8
+          }},
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} GB` } }
+        }
+      }
+    });
+  }
+
+  let allRows = [];
+
+  function renderTable(daily) {
+    allRows = daily;
+    const max = Math.max(...daily.map(d => d.usage_gb));
+    buildTable(daily, max);
+  }
+
+  function buildTable(rows, max) {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    rows.forEach((row, i) => {
+      const pct  = max > 0 ? (row.usage_gb / max) * 120 : 0;
+      const level = row.usage_gb === 0 ? ["zero","—"]
+                  : row.usage_gb > 30  ? ["high","High"]
+                  : row.usage_gb > 15  ? ["med","Med"]
+                  : ["low","Low"];
+      tbody.innerHTML += `
+        <tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td>${row.date}</td>
+          <td style="color:var(--muted)">${row.month}</td>
+          <td>
+            <div class="usage-bar-cell">
+              <div class="usage-bar" style="width:${pct}px"></div>
+              <span class="${row.usage_gb === 0 ? 'usage-zero' : ''}">${row.usage_gb}</span>
+            </div>
+          </td>
+          <td><span class="badge badge-${level[0]}">${level[1]}</span></td>
+        </tr>`;
+    });
+  }
+
+  function filterTable() {
+    const q = document.getElementById("searchInput").value.toLowerCase();
+    const filtered = allRows.filter(r =>
+      r.date.includes(q) || r.month.toLowerCase().includes(q)
+    );
+    const max = Math.max(...allRows.map(d => d.usage_gb));
+    buildTable(filtered, max);
+  }
+
+  // ── EXPORT ──
+  async function exportCSV() {
+    if (!parsedData) return;
+    const res  = await fetch("/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily: parsedData.daily })
+    });
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "daily_usage.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── RESET ──
+  function resetAll() {
+    selectedFiles = new DataTransfer();
+    parsedData = null;
+    document.getElementById("fileList").innerHTML = "";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("errorBox").style.display = "none";
+    document.getElementById("parseBtn").disabled = true;
+    document.getElementById("exportBtn").disabled = true;
+    if (dailyChartInst)   dailyChartInst.destroy();
+    if (monthlyChartInst) monthlyChartInst.destroy();
+  }
+</script>
+</body>
+</html>
