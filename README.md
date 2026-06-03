@@ -1,2 +1,37 @@
-To webscrape the data usage from the starlink you can create a new saved snapshot from this "link https://starlink.com/account/service-line/AST-2293597-46342-54?selectedDevice=ut01000000-00000000-0060d786&page=0&limit=5", or you can just use the uploaded html files from the folder.
-To do a saved snapshot you can press ctrl+s and saved it, either complete or just html only.
+Starlink Usage Tracker
+A Flask web app that parses Starlink saved HTML pages and visualizes daily data usage.
+Setup
+
+Install dependencies:
+
+bash   pip install -r requirements.txt
+
+Run the app:
+
+bash python app.py
+
+Open your browser at:
+
+http://localhost:5000
+How to use
+
+Save your Starlink usage pages as HTML (Ctrl+S in browser)
+Upload them via the web UI (drag & drop or click to browse)
+Click Parse Usage Data
+View daily chart, monthly totals, and full table
+Click Export CSV to download the data
+
+File naming
+The app auto-detects the month from the filename, e.g.:
+
+Nov-December.html → starts at November 2025
+Jan-Feb.html      → starts at January 2026
+april-may.html    → starts at April 2026
+
+Folder structure
+starlink_scraper/
+├── app.py
+├── requirements.txt
+├── templates/
+│   └── index.html
+└── uploads/       ← auto-created on first run
