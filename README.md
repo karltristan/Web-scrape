@@ -19,7 +19,12 @@ Save your Starlink usage pages as HTML (Ctrl+S in browser)
 Upload them via the web UI (drag & drop or click to browse)
 Click Parse Usage Data
 View daily chart, monthly totals, and full table
-Click Export CSV to download the data
+Click Export CSV to download the data 
+
+or 
+
+You can use the html files from the upload folder inside the starlink_scrapper folder
+just move the files outside the upload folder.
 
 File naming
 The app auto-detects the month from the filename, e.g.:
